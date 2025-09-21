@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MindMate — Youth Mental Wellness (Prototype)</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f2f7f9; }
+  header { background:#3b82f6; color:white; padding:14px; text-align:center; }
+  .container { margin-top:18px; }
+  .card { box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  .chat-box { height:240px; overflow:auto; background:#fff; padding:10px; border-radius:6px; border:1px solid #e6eef9; }
+  .msg-user { text-align:right; margin:6px 0; }
+  .msg-bot { text-align:left; margin:6px 0; }
+  .msg { display:inline-block; padding:8px 12px; border-radius:12px; max-width:78%; }
+  .msg-user .msg { background:#3b82f6; color:white; }
+  .msg-bot .msg { background:#eef6ff; color:#08306b; }
+  .small-note { font-size:0.85rem; color:#555; }
+  footer { margin-top:18px; text-align:center; font-size:0.9rem; color:#666; }
+  .danger-box { background:#fff8f8; border-left:4px solid #f43f5e; padding:10px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h2>MindMate ♡</h2>
+  <div style="font-size:0.95rem">Generative AI for Youth Mental Wellness — Prototype Demo</div>
+</header>
+
+<div class="container">
+  <div class="row g-3">
+    <!-- Left column: tools -->
+    <div class="col-lg-6">
+      <div class="card p-3 mb-3">
+        <h5>Mood Tracker</h5>
+        <p class="small-note">Slide to record your current mood. Entries are stored locally for demo.</p>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <input id="moodRange" type="range" min="0" max="10" value="5" class="form-range" oninput="updateMoodLabel(this.value)">
+          <div><strong id="moodLabel">5</strong>/10</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" onclick="saveMood()">Record Mood</button>
+          <button class="btn btn-outline-secondary" onclick="clearMoodHistory()">Clear History</button>
+        </div>
+        <div id="moodHistory" class="mt-3 small-note"></div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Quick Journal</h5>
+        <p class="small-note">Write a short entry — helps reflect. Saved locally in your browser for demo.</p>
+        <textarea id="journalText" class="form-control mb-2" rows="4" placeholder="Write how you're feeling..."></textarea>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success" onclick="saveJournal()">Save Entry</button>
+          <button class="btn btn-outline-secondary" onclick="showJournalHistory()">View History</button>
+        </div>
+        <div id="journalHistory" class="mt-3 small-note"></div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Quick Coping Exercises</h5>
+        <p class="small-note">Practice one of the simple techniques below.</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-light" onclick="startBreathing()">Guided 4-4-4 Breathing</button>
+          <button class="btn btn-light" onclick="groundingExercise()">5-4-3-2-1 Grounding</button>
+          <button class="btn btn-light" onclick="positiveAffirmation()">Positive Affirmation</button>
+        </div>
+        <div id="exerciseArea" class="mt-3 small-note"></div>
+      </div>
+    </div>
+
+    <!-- Right column: chat & resources -->
+    <div class="col-lg-6">
+      <div class="card p-3 mb-3">
+        <h5>MindMate Chat (Demo)</h5>
+        <p class="small-note">Type something like "I feel anxious about exams" or "I'm stressed". This demo uses safe scripted responses.</p>
+        <div class="chat-box mb-2" id="chatBox"></div>
+        <div class="input-group">
+          <input id="userInput" type="text" class="form-control" placeholder="How are you feeling today?" onkeydown="if(event.key==='Enter') sendChat()">
+          <button class="btn btn-primary" onclick="sendChat()">Send</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Resources & Emergency</h5>
+        <div class="small-note mb-2">If you are in crisis, contact local emergency services or a mental health helpline immediately. This tool is not a substitute for professional help.</div>
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-outline-danger" onclick="showEmergency()">Show Emergency Contacts</button>
+          <button class="btn btn-outline-primary" onclick="showSelfHelp()">Self-help Resources</button>
+        </div>
+        <div id="resourceArea" class="mt-2"></div>
+      </div>
+
+      <div class="card p-3 mt-2 danger-box">
+        <strong>Disclaimer:</strong> This prototype demonstrates UI and flows only. It does not provide clinical diagnosis or therapy. If you're at risk, call local emergency services or a suicide prevention hotline immediately.
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="small-note">Prototype for demonstration. In a production system we would integrate a privacy-preserving backend, trained models, human escalation, and clinician review.</div>
+  </footer>
+</div>
+
+<script>
+/* Storage keys */
+const MOOD_KEY = 'mindmate_mood_history';
+const JOURNAL_KEY = 'mindmate_journal_history';
+
+/* Mood tracker */
+function updateMoodLabel(v){ document.getElementById('moodLabel').textContent = v; }
+
+function loadMoodHistory(){
+  const hist = JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
+  renderMoodHistory(hist);
+}
+function saveMood(){
+  const v = document.getElementById('moodRange').value;
+  const hist = JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
+  hist.unshift({value: v, time: new Date().toLocaleString()});
+  if(hist.length>20) hist.pop();
+  localStorage.setItem(MOOD_KEY, JSON.stringify(hist));
+  renderMoodHistory(hist);
+}
+function renderMoodHistory(hist){
+  const el = document.getElementById('moodHistory');
+  if(!hist.length) { el.innerHTML = '<em>No mood entries yet.</em>'; return; }
+  el.innerHTML = '<strong>Recent moods:</strong><br>' + hist.map(h=>`[${h.time}] ${h.value}/10`).join('<br>');
+}
+function clearMoodHistory(){ localStorage.removeItem(MOOD_KEY); loadMoodHistory(); }
+
+/* Journal */
+function saveJournal(){
+  const text = document.getElementById('journalText').value.trim();
+  if(!text){ alert('Write something before saving.'); return; }
+  const hist = JSON.parse(localStorage.getItem(JOURNAL_KEY) || '[]');
+  hist.unshift({text, time: new Date().toLocaleString()});
+  if(hist.length>30) hist.pop();
+  localStorage.setItem(JOURNAL_KEY, JSON.stringify(hist));
+  document.getElementById('journalText').value = '';
+  showJournalHistory();
+}
+function showJournalHistory(){
+  const hist = JSON.parse(localStorage.getItem(JOURNAL_KEY) || '[]');
+  const el = document.getElementById('journalHistory');
+  if(!hist.length) { el.innerHTML = '<em>No journal entries yet.</em>'; return; }
+  el.innerHTML = '<strong>Recent entries:</strong><br>' + hist.slice(0,5).map(h=>`[${h.time}] ${escapeHtml(h.text)}`).join('<br><hr>');
+}
+
+/* Chat - canned supportive logic */
+const canned = [
+  {pattern: /anxious|anxiety|nervous|panic/i, reply: "I'm sorry you're feeling anxious. Try taking three slow breaths with me: inhale 4s, hold 4s, exhale 4s. Want a short breathing exercise?"},
+  {pattern: /depress|sad|down|hopeless/i, reply: "I hear you. Feeling low can be heavy. Would you like a quick grounding exercise or some resources for support?"},
+  {pattern: /stress|exam|study|pressure/i, reply: "Stress about exams is common — breaking tasks into small steps helps. Want a 5-minute planning prompt?"},
+  {pattern: /sleep|insomnia|can't sleep/i, reply: "Sleep troubles are tough. Try a wind-down routine: reduce screens, breathe slowly, and write down worries you can address tomorrow."},
+  {pattern: /suicid|kill myself|end my life/i, reply: "I am not able to help with crises. If you are in immediate danger, please call your local emergency services or a suicide prevention hotline now.", escalate: true},
+  {pattern: /.*/, reply: "Thank you for sharing. If you'd like, tell me more or choose an exercise. I can offer breathing, grounding, or journaling prompts."}
+];
+
+function sendChat(){
+  const input = document.getElementById('userInput');
+  const txt = input.value.trim();
+  if(!txt) return;
+  appendChat('user', txt);
+  input.value = '';
+  // simulate "AI" response
+  setTimeout(()=> {
+    const resp = canned.find(c => c.pattern.test(txt)) || canned[canned.length-1];
+    appendChat('bot', resp.reply);
+    if(resp.escalate) {
+      appendChat('bot', '⚠ Please contact emergency services or a crisis helpline immediately.');
+      showEmergency();
+    }
+  }, 600);
+}
+function appendChat(who, text){
+  const cb = document.getElementById('chatBox');
+  const wrapper = document.createElement('div');
+  wrapper.className = who === 'user' ? 'msg-user' : 'msg-bot';
+  const msg = document.createElement('span');
+  msg.className = 'msg';
+  msg.innerHTML = escapeHtml(text);
+  wrapper.appendChild(msg);
+  cb.appendChild(wrapper);
+  cb.scrollTop = cb.scrollHeight;
+}
+
+/* Resources & emergency */
+function showEmergency(){
+  const area = document.getElementById('resourceArea');
+  area.innerHTML = `
+    <div><strong>Emergency Contacts (example):</strong></div>
+    <ul>
+      <li>Local Emergency: <strong>112</strong></li>
+      <li>India (iCALL): <strong>9152987821</strong></li>
+      <li>Find national helpline in your country if outside India</li>
+    </ul>
+    <div class="small-note">If you or someone is in immediate danger, call emergency services now.</div>
+  `;
+}
+function showSelfHelp(){
+  const area = document.getElementById('resourceArea');
+  area.innerHTML = `
+    <div><strong>Self-help Resources</strong></div>
+    <ul>
+      <li><strong>4-4-4 Breathing</strong>: Inhale 4s, hold 4s, exhale 4s — repeat 6 times.</li>
+      <li><strong>5-4-3-2-1 Grounding</strong>: Name 5 things you see, 4 you can touch, 3 you hear, 2 you smell, 1 you taste.</li>
+      <li><strong>Short Journaling</strong>: Spend 5 minutes writing 3 things you did well today.</li>
+    </ul>
+  `;
+}
+
+/* Coping exercises (text-guided) */
+function startBreathing(){
+  let step = 0;
+  const area = document.getElementById('exerciseArea');
+  area.innerHTML = '<strong>Breathing exercise:</strong> Follow the instructions below.';
+  const seq = ['Breathe in — 4 seconds', 'Hold — 4 seconds', 'Breathe out — 4 seconds'];
+  const id = setInterval(()=>{
+    area.innerHTML = `<strong>Breathing exercise:</strong><br><div style="margin-top:8px">${seq[step]}</div>`;
+    step = (step + 1) % seq.length;
+  }, 4000);
+  setTimeout(()=> { clearInterval(id); area.innerHTML = 'Exercise complete. How do you feel now?'; }, 4000*6);
+}
+function groundingExercise(){
+  const area = document.getElementById('exerciseArea');
+  area.innerHTML = `<strong>Grounding (5-4-3-2-1):</strong><br>Look around and name 5 things you can SEE, 4 you can TOUCH, 3 you can HEAR, 2 you can SMELL, 1 you can TASTE.`;
+}
+function positiveAffirmation(){
+  const area = document.getElementById('exerciseArea');
+  area.innerHTML = `Repeat: "I am doing my best right now. Small steps are progress." Try saying it 3 times slowly.`;
+}
+
+/* Utilities */
+function escapeHtml(unsafe){
+  return unsafe.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+}
+
+/* Initialize */
+loadMoodHistory();
+showJournalHistory();
+appendChat('bot', 'Hi — I am MindMate. You can tell me how you feel or try one of the exercises. If this is an emergency, use the Emergency button.');
+</script>
+</body>
+</html>
